@@ -1,0 +1,288 @@
+import pandas as pd
+import seaborn as sns
+from ctgan import CTGAN
+import matplotlib.pyplot as plt
+
+
+#logistic regression
+
+# Importing scikit logistic regression module
+from sklearn.linear_model import LogisticRegression
+
+# Impoting metrics
+from sklearn import metrics
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import f1_score
+from sklearn.metrics import classification_report
+
+# Importing libraries for cross validation
+from sklearn.model_selection import KFold
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import GridSearchCV
+
+df=pd.read_csv(r"C:\Users\irfan\Downloads\archive\creditcard.csv")
+
+df.columns
+
+df['Class'].value_counts()
+
+# Bar plot for the number of fraudulent vs non-fraudulent transcations
+sns.countplot(x='Class', data=df)
+plt.title('Number of fraudulent vs non-fraudulent transcations')
+plt.show()
+
+#as it is highly imbalanced dataset need to balance it using gans
+
+categorical_columns = df.select_dtypes(include=['object']).columns.tolist()
+
+minority_class = df[df['Class'] == 1]
+majority_class = df[df['Class'] == 0]
+
+
+# Create and train the CTGAN model on the minority class
+ctgan = CTGAN(epochs=100)
+ctgan.fit(minority_class)
+
+
+num_samples_to_generate = len(majority_class) - len(minority_class)
+synthetic_samples = ctgan.sample(num_samples_to_generate)
+
+
+df = pd.concat([df, synthetic_samples], ignore_index=True)
+
+
+df['Class'].value_counts()
+
+#handling missing values
+# Cheking percent of missing values in columns
+df_missing_columns = (round(((df.isnull().sum()/len(df.index))*100),2).to_frame('null')).sort_values('null', ascending=False)
+df_missing_columns
+
+#train_test_split
+# Import library
+from sklearn.model_selection import train_test_split
+
+# Putting feature variables into X
+X = df.drop(['Class'], axis=1)
+
+# Putting target variable to y
+y = df['Class']
+
+# Splitting data into train and test set 80:20
+X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8, test_size=0.2, random_state=100)
+
+#scaling features 
+
+# Standardization method
+from sklearn.preprocessing import StandardScaler
+
+# Instantiate the Scaler
+scaler = StandardScaler()
+
+# Fit the data into scaler and transform
+X_train['Amount'] = scaler.fit_transform(X_train[['Amount']])
+
+X_train.head()
+
+# Transform the test set
+X_test['Amount'] = scaler.transform(X_test[['Amount']])
+X_test.head()
+
+#logistic regression
+# Creating KFold object with 5 splits
+folds = KFold(n_splits=5, shuffle=True, random_state=4)
+
+# Specify params
+params = {"C": [0.01, 0.1, 1, 10, 100, 1000]}
+
+# Specifing score as recall as we are more focused on acheiving the higher sensitivity than the accuracy
+model_cv = GridSearchCV(estimator = LogisticRegression(),
+                        param_grid = params, 
+                        scoring= 'roc_auc', 
+                        cv = folds, 
+                        verbose = 1,
+                        return_train_score=True) 
+
+# Fit the model
+model_cv.fit(X_train, y_train)
+
+# results of grid search CV
+cv_results = pd.DataFrame(model_cv.cv_results_)
+cv_results
+
+# Best score with best C
+best_score = model_cv.best_score_
+best_C = model_cv.best_params_['C']
+
+print(" The highest test roc_auc is {0} at C = {1}".format(best_score, best_C))
+
+#Logistic regression with optimal C
+
+# Instantiate the model with best C
+logistic_bal_rus = LogisticRegression(C=0.01)
+
+# Fit the model on the train set
+logistic_bal_rus_model = logistic_bal_rus.fit(X_train, y_train)
+# Predictions on the train set
+y_train_pred = logistic_bal_rus_model.predict(X_train)
+
+# Confusion matrix
+confusion = metrics.confusion_matrix(y_train, y_train_pred)
+print(confusion)
+
+TP = confusion[1,1] # true positive 
+TN = confusion[0,0] # true negatives
+FP = confusion[0,1] # false positives
+FN = confusion[1,0] # false negatives
+
+print("Accuracy:-",metrics.accuracy_score(y_train, y_train))
+
+# Sensitivity
+print("Sensitivity:-",TP / float(TP+FN))
+
+# Specificity
+print("Specificity:-", TN / float(TN+FP))
+
+# F1 score
+print("F1-Score:-", f1_score(y_train, y_train_pred))
+
+# classification_report
+print(classification_report(y_train, y_train))
+
+# Prediction on the test set
+y_test_pred = logistic_bal_rus_model.predict(X_test)
+
+# Confusion matrix
+confusion = metrics.confusion_matrix(y_test, y_test_pred)
+print(confusion)
+
+TP = confusion[1,1] # true positive 
+TN = confusion[0,0] # true negatives
+FP = confusion[0,1] # false positives
+FN = confusion[1,0] # false negatives
+
+# Accuracy
+print("Accuracy:-",metrics.accuracy_score(y_test, y_test_pred))
+
+# Sensitivity
+print("Sensitivity:-",TP / float(TP+FN))
+
+# Specificity
+print("Specificity:-", TN / float(TN+FP))
+
+# classification_report
+print(classification_report(y_test, y_test_pred))
+
+#xgboost
+
+# Importing XGBoost
+from xgboost import XGBClassifier
+
+# hyperparameter tuning with XGBoost
+
+# creating a KFold object 
+folds = 3
+
+# specify range of hyperparameters
+param_grid = {'learning_rate': [0.2, 0.6], 
+             'subsample': [0.3, 0.6, 0.9]}          
+
+
+# specify model
+xgb_model = XGBClassifier(max_depth=2, n_estimators=200)
+
+# set up GridSearchCV()
+model_cv = GridSearchCV(estimator = xgb_model, 
+                        param_grid = param_grid, 
+                        scoring= 'roc_auc', 
+                        cv = folds, 
+                        verbose = 1,
+                        return_train_score=True)      
+
+# fit the model
+model_cv.fit(X_train, y_train)  
+
+# cv results
+cv_results = pd.DataFrame(model_cv.cv_results_)
+cv_results
+
+model_cv.best_params_
+
+# chosen hyperparameters
+# 'objective':'binary:logistic' outputs probability rather than label, which we need for calculating auc
+params = {'learning_rate': 0.2,
+          'max_depth': 2, 
+          'n_estimators':200,
+          'subsample':0.9,
+         'objective':'binary:logistic'}
+
+# fit model on training data
+xgb_imb_model = XGBClassifier(params = params)
+xgb_imb_model.fit(X_train, y_train)
+
+# Predictions on the train set
+y_train_pred = xgb_imb_model.predict(X_train)
+# Confusion matrix
+confusion = metrics.confusion_matrix(y_train, y_train_pred)
+print(confusion)
+
+
+TP = confusion[1,1] # true positive 
+TN = confusion[0,0] # true negatives
+FP = confusion[0,1] # false positives
+FN = confusion[1,0] # false negatives
+
+
+# Accuracy
+print("Accuracy:-",metrics.accuracy_score(y_train, y_train_pred))
+
+# Sensitivity
+print("Sensitivity:-",TP / float(TP+FN))
+
+# Specificity
+print("Specificity:-", TN / float(TN+FP))
+
+# F1 score
+print("F1-Score:-", f1_score(y_train, y_train_pred))
+
+
+# classification_report
+print(classification_report(y_train, y_train_pred))
+
+# Predictions on the test set
+y_test_pred = xgb_imb_model.predict(X_test)
+
+# Predictions on the test set
+y_test_pred = xgb_imb_model.predict(X_test)
+
+# Confusion matrix
+confusion = metrics.confusion_matrix(y_test, y_test_pred)
+print(confusion)
+
+TP = confusion[1,1] # true positive 
+TN = confusion[0,0] # true negatives
+FP = confusion[0,1] # false positives
+FN = confusion[1,0] # false negatives
+
+
+# Accuracy
+print("Accuracy:-",metrics.accuracy_score(y_test, y_test_pred))
+
+# Sensitivity
+print("Sensitivity:-",TP / float(TP+FN))
+
+# Specificity
+print("Specificity:-", TN / float(TN+FP))
+
+# F1 score
+print("F1-Score:-", f1_score(y_test, y_test_pred))
+
+# classification_report
+print(classification_report(y_test, y_test_pred))
+
+pandas
+seaborn
+matplotlib
+scikit-learn
+ctgan
+imblearn
