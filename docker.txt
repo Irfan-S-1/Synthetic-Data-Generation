@@ -1,0 +1,15 @@
+FROM python:3.9-slim
+
+WORKDIR / C:\Users\irfan\Desktop\latest
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY main_model.joblib .
+
+# Optionally, copy your scripts or other files if needed
+# COPY your_script.py .
+
+# Specify the command to run on container start (modify as necessary)
+CMD ["python3"]
