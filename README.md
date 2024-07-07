@@ -5,7 +5,7 @@ The aim of this project is to predict fraudulent credit card transactions using 
 
 ## Dataset
 
-The dataset contains transactions made over a period of two days in September 2013 by European credit cardholders. The dataset is highly imbalanced, with the positive class (frauds) accounting for only 0.172% of all transactions. Addressing this imbalance is a key challenge in building an effective fraud detection model.
+The dataset contains transactions made over a period of two days in September 2013 by European credit cardholders. The dataset is highly imbalanced, with the positive class (frauds) accounting for only 0.172% of all transactions. Addressing this imbalance is a key challenge in building an effective fraud detection model.The dataset is highly imbalanced hence we used some balancing techniques to make the data balanced.
 
 ## Project Goals
 
